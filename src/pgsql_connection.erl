@@ -41,10 +41,10 @@
     foreach/4,
     foreach/5,
     foreach/6,
- 
+
     send_copy_data/2,
     send_copy_end/1,
-    
+
     % Cancel current query
     cancel/1,
 
@@ -60,7 +60,7 @@
     param_query/3,
     param_query/4,
     param_query/5,
-    
+
     convert_statement/1,
 
     % supervisor API
@@ -85,7 +85,7 @@
 %% Default settings
 %%--------------------------------------------------------------------
 
--define(REQUEST_TIMEOUT, infinity). 
+-define(REQUEST_TIMEOUT, infinity).
 -define(DEFAULT_HOST, "127.0.0.1").
 -define(DEFAULT_PORT, 5432).
 -define(DEFAULT_USER, "storage").
@@ -183,7 +183,7 @@
 
 %%--------------------------------------------------------------------
 %% @doc Open a connection to a database, throws an error if it failed.
-%% 
+%%
 -spec open(iodata() | open_options()) -> pgsql_connection().
 open([Option | _OptionsT] = Options) when is_tuple(Option) orelse is_atom(Option) ->
     open0(Options);
@@ -192,28 +192,28 @@ open(Database) ->
 
 %%--------------------------------------------------------------------
 %% @doc Open a connection to a database, throws an error if it failed.
-%% 
+%%
 -spec open(iodata(), iodata()) -> pgsql_connection().
 open(Database, User) ->
     open(Database, User, ?DEFAULT_PASSWORD).
 
 %%--------------------------------------------------------------------
 %% @doc Open a connection to a database, throws an error if it failed.
-%% 
+%%
 -spec open(iodata(), iodata(), iodata()) -> pgsql_connection().
 open(Database, User, Password) ->
     open(?DEFAULT_HOST, Database, User, Password).
 
 %%--------------------------------------------------------------------
 %% @doc Open a connection to a database, throws an error if it failed.
-%% 
+%%
 -spec open(string(), string(), string(), string()) -> pgsql_connection().
 open(Host, Database, User, Password) ->
     open(Host, Database, User, Password, []).
 
 %%--------------------------------------------------------------------
 %% @doc Open a connection to a database, throws an error if it failed.
-%% 
+%%
 -spec open(string(), string(), string(), string(), open_options()) -> pgsql_connection().
 open(Host, Database, User, Password, Options0) ->
     Options = [{host, Host}, {database, Database}, {user, User}, {password, Password} | Options0],
@@ -228,7 +228,7 @@ open0(Options) ->
 
 %%--------------------------------------------------------------------
 %% @doc Close a connection.
-%% 
+%%
 -spec close(pgsql_connection()) -> ok.
 close({pgsql_connection, Pid}) ->
     MonitorRef = erlang:monitor(process, Pid),
@@ -244,7 +244,7 @@ close({pgsql_connection, Pid}) ->
 %% <li>``{updated, NbRows}'' if the query was not a SELECT query.</li>
 %% </ul>
 %% (the return types are compatible with ODBC's sql_query function).
-%% 
+%%
 -spec sql_query(iodata(), pgsql_connection()) -> odbc_result_tuple() | {error, any()}.
 sql_query(Query, Connection) ->
     sql_query(Query, [], Connection).
@@ -615,15 +615,16 @@ pgsql_setup_startup(#state{socket = {SockModule, Sock} = Socket, options = Optio
     % Send startup packet connection packet.
     User = proplists:get_value(user, Options, ?DEFAULT_USER),
     Database = proplists:get_value(database, Options, User),
-    ApplicationName = case proplists:get_value(application_name, Options, node()) of
-        ApplicationNameAtom when is_atom(ApplicationNameAtom) -> atom_to_binary(ApplicationNameAtom, utf8);
-        ApplicationNameString -> ApplicationNameString
-    end,
     TZOpt = case proplists:get_value(timezone, Options, undefined) of
         undefined -> [];
         Timezone -> [{<<"timezone">>, Timezone}]
     end,
-    StartupMessage = pgsql_protocol:encode_startup_message([{<<"user">>, User}, {<<"database">>, Database}, {<<"application_name">>, ApplicationName} | TZOpt]),
+    TZAppOpt = case proplists:get_value(application_name, Options, node()) of
+        undefined -> TZOpt;
+        ApplicationNameAtom when is_atom(ApplicationNameAtom) -> [{<<"application_name">>, atom_to_binary(ApplicationNameAtom, utf8)} | TZOpt];
+        ApplicationNameString -> [{<<"application_name">>, ApplicationNameString} | TZOpt]
+    end,
+    StartupMessage = pgsql_protocol:encode_startup_message([{<<"user">>, User}, {<<"database">>, Database} | TZAppOpt]),
     case SockModule:send(Sock, StartupMessage) of
         ok ->
             case receive_message(Socket, sync, Subscribers) of
@@ -1117,7 +1118,7 @@ fold_finalize(_Tag, Acc) ->
     {ok, Acc}.
 
 map_fn(Row, {Function, Acc}) -> {Function, [Function(Row) | Acc]}.
-    
+
 map_finalize(_Tag, {_Function, Acc}) ->
     {ok, lists:reverse(Acc)}.
 
@@ -1130,7 +1131,7 @@ foreach_finalize(_Tag, _Function) ->
 
 %%--------------------------------------------------------------------
 %% @doc Handle parameter status messages. These can happen anytime.
-%% 
+%%
 handle_parameter(<<"integer_datetimes">> = Key, <<"on">> = Value, AsyncT, State0) ->
     set_parameter_async(Key, Value, AsyncT),
     State0#state{integer_datetimes = true};
@@ -1236,7 +1237,7 @@ decode_object(Object) ->
     ObjectUStr = re:replace(Object, <<" ">>, <<"_">>, [global, {return, list}]),
     ObjectULC = string:to_lower(ObjectUStr),
     [list_to_atom(ObjectULC)].
-    
+
 %%--------------------------------------------------------------------
 %% @doc Convert a native result to an odbc result.
 %%
@@ -1404,7 +1405,7 @@ process_active_data(PartialHeader, #state{socket = {SockModule, Sock}} = State0)
             error_logger:error_msg("Unexpected asynchronous error\n~p\n", [Error]),
             SockModule:close(Sock),
             State0#state{socket = closed}
-    end.    
+    end.
 
 %%--------------------------------------------------------------------
 %% @doc Subscribe to notifications. We setup a monitor to clean the list up.
@@ -1430,9 +1431,9 @@ do_unsubscribe(Pid, List) ->
 %%
 call_and_retry(ConnPid, Command, Retry, Timeout) ->
     case gen_server:call(ConnPid, {do_query, Command}, Timeout) of
-        {error, closed} when Retry -> 
+        {error, closed} when Retry ->
             call_and_retry(ConnPid, Command, Retry, Timeout);
-        Other -> 
+        Other ->
             Other
     end.
 
